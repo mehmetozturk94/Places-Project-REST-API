@@ -1,11 +1,12 @@
-const { uuid } = require("uuidv4");
+const uuid = require("uuid/v4");
 const { validationResult } = require("express-validator");
+const mongoose = require("mongoose");
+const HttpError = require("../models/http-error");
 const Place = require("../models/place");
 const User = require("../models/user");
-const HttpError = require("../models/http-error");
 
 const getPlaceById = async (req, res, next) => {
-  const placeId = req.params.pid; // { pid: 'p1' }
+  const placeId = req.params.pid;
 
   let place;
   try {
@@ -20,16 +21,15 @@ const getPlaceById = async (req, res, next) => {
 
   if (!place) {
     const error = new HttpError(
-      "Could not find a place for the provided id.",
+      "Could not find place for the provided id.",
       404
     );
     return next(error);
   }
 
-  res.json({ place: place.toObject({ getters: true }) }); // => { place } => { place: place }
+  res.json({ place: place.toObject({ getters: true }) });
 };
 
-// Middleware Get User ID
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.uid;
 
@@ -59,7 +59,6 @@ const getPlacesByUserId = async (req, res, next) => {
   });
 };
 
-// Middleware Create Place "POST"
 const createPlace = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -68,7 +67,7 @@ const createPlace = async (req, res, next) => {
     );
   }
 
-  const { title, description, address, creator, location } = req.body;
+  const { title, description, address, location, creator } = req.body;
 
   const createdPlace = new Place({
     title,
@@ -76,7 +75,7 @@ const createPlace = async (req, res, next) => {
     address,
     location,
     image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Empire_State_Building_%28aerial_view%29.jpg/400px-Empire_State_Building_%28aerial_view%29.jpg",
+      "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Empire_State_Building_%28aerial_view%29.jpg/400px-Empire_State_Building_%28aerial_view%29.jpg", // => File Upload module, will be replaced with real image url
     creator,
   });
 
@@ -84,19 +83,24 @@ const createPlace = async (req, res, next) => {
   try {
     user = await User.findById(creator);
   } catch (err) {
-    const error = new HttpError("Creating place failed, please try again", 500);
+    const error = new HttpError(
+      "Creating place failed, please try again.",
+      500
+    );
     return next(error);
   }
 
   if (!user) {
-    const error = new HttpError("Could not find user for provided id", 404);
+    const error = new HttpError("Could not find user for provided id.", 404);
     return next(error);
   }
-  console.log(user)
+
+  console.log(user);
+
   try {
     const sess = await User.startSession();
     sess.startTransaction();
-    await createdPlace.save();
+    await createdPlace.save({ session: sess });
     user.places.push(createdPlace);
     await user.save({ session: sess });
     await sess.commitTransaction();
@@ -111,7 +115,6 @@ const createPlace = async (req, res, next) => {
   res.status(201).json({ place: createdPlace });
 };
 
-//Middleware Update Place
 const updatePlace = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -150,7 +153,6 @@ const updatePlace = async (req, res, next) => {
   res.status(200).json({ place: place.toObject({ getters: true }) });
 };
 
-//Middleware Delete Place
 const deletePlace = async (req, res, next) => {
   const placeId = req.params.pid;
 
